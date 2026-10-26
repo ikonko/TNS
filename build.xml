@@ -10,6 +10,18 @@
 <project name="TNS" default="default" basedir=".">
     <description>Builds, tests, and runs the project TNS.</description>
     <import file="nbproject/build-impl.xml"/>
+
+    <target name="-preserve-tns-config">
+        <copy file="${dist.dir}/tns.config" tofile="${basedir}/tns.config"
+              failonerror="false" overwrite="false"/>
+    </target>
+    <target name="clean" depends="init,deps-clean,-preserve-tns-config,-do-clean,-post-clean"
+            description="Clean build products."/>
+    <target name="-post-jar">
+        <copy file="${basedir}/tns.config" todir="${dist.dir}"
+              failonerror="false" overwrite="false"/>
+    </target>
+
     <!--
 
     There exist several targets which are by default empty and which can be 

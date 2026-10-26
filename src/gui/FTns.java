@@ -178,7 +178,20 @@ public class FTns extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void bResetActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bResetActionPerformed
-        m.Reset(false);
+        Config config = m.getConfig();
+        config.drive1 = m.getWDC().getImage(1);
+        config.drive2 = m.getWDC().getImage(2);
+        config.drive3 = m.getWDC().getImage(3);
+        config.drive4 = m.getWDC().getImage(4);
+        config.hdd = m.getWAP().getImage();
+        removeKeyListener(m.getKeyboard());
+        m.shutdown();
+        m = new Tns(config);
+        connectMachine();
+        bPause.setSelected(true);
+        m.start();
+        scr.repaint();
+        requestFocusInWindow();
     }//GEN-LAST:event_bResetActionPerformed
 
     private void bNmiActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bNmiActionPerformed
@@ -231,29 +244,32 @@ public class FTns extends javax.swing.JFrame {
     }//GEN-LAST:event_bPauseActionPerformed
 
     private void formWindowClosing(java.awt.event.WindowEvent evt) {//GEN-FIRST:event_formWindowClosing
-        
+        m.shutdown();
     }//GEN-LAST:event_formWindowClosing
 
     private void initEmulator() {
         m = new Tns();
         scr = new Screen();
-        
-        m.setScreen(scr);
-        scr.setImage(m.getImage());
+
+        connectMachine();
 
         getContentPane().add(scr, BorderLayout.CENTER);
         pack();
         
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        setLocation((screen.width-getSize().width)/2, (screen.height-getSize().height)/2);
+        setFocusTraversalKeysEnabled(false);
+        m.start();
+    }
+
+    private void connectMachine() {
+        m.setScreen(scr);
+        scr.setImage(m.getImage());
         m.setLed1(Drv1);
         m.setLed2(Drv2);
         m.setLed3(Drv3);
         m.setLed4(Drv4);
-        
-        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-        setLocation((screen.width-getSize().width)/2, (screen.height-getSize().height)/2);
-        setFocusTraversalKeysEnabled(false);
         addKeyListener(m.getKeyboard());
-        m.start();
     }
 
     /**

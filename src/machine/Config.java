@@ -42,6 +42,14 @@ public class Config {
         return retVal;
     }
 
+    private String getConfigPath() {
+        String configuredPath = System.getProperty("tns.config.path");
+        if ((configuredPath != null) && !configuredPath.trim().isEmpty()) {
+            return configuredPath;
+        }
+        return getMyPath() + filename;
+    }
+
     public void SaveConfig() {
         Properties prop = new Properties();
         prop.setProperty("DRIVE1", drive1);
@@ -53,7 +61,7 @@ public class Config {
         prop.setProperty("VIDEOBW", String.valueOf(videobw));
         prop.setProperty("VIDEOITK", String.valueOf(videoitk));
      
-        String fileName = getMyPath() + filename;
+        String fileName = getConfigPath();
         OutputStream os;
         try {
             os = new FileOutputStream(fileName);
@@ -90,7 +98,7 @@ public class Config {
 
     public void LoadConfig() {
         Properties prop = new Properties();
-        String fileName = getMyPath() + filename;
+        String fileName = getConfigPath();
         InputStream is;
         try {
             is = new FileInputStream(fileName);

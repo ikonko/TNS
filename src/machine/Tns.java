@@ -41,6 +41,7 @@ public class Tns extends Thread
     public JLabel Led1, Led2, Led3, Led4;
     
     private boolean paused;
+    private boolean closed;
     private boolean boot;
     private boolean fdcsync;
     private boolean runap;
@@ -57,7 +58,17 @@ public class Tns extends Thread
     private boolean pflp; // pfL src-dst page flip flop
 
     public Tns() {
-        cfg = new Config(); cfg.LoadConfig();
+        this(loadConfig());
+    }
+
+    private static Config loadConfig() {
+        Config config = new Config();
+        config.LoadConfig();
+        return config;
+    }
+
+    public Tns(Config config) {
+        cfg = config;
         img = new BufferedImage(640, 256, BufferedImage.TYPE_INT_RGB);
         mem = new Memory(cfg);
         tim = new Timer("Timer");
@@ -128,7 +139,7 @@ public class Tns extends Thread
         return cpu.getRegPC();
     }
     
-    public final void Reset(boolean dirty) {
+    public final synchronized void Reset(boolean dirty) {
         boot = true;
         fdcsync = false;
         runap = false;
@@ -144,7 +155,7 @@ public class Tns extends Thread
         cpu.reset();
         grf.reset();
         key.reset();
-        wdc.reset();
+        wdc.coldReset();
         wap.reset();
     }
     
@@ -155,8 +166,8 @@ public class Tns extends Thread
 //        mem.dumpRam("dump.bin", 0, 7);
     }
 
-    public void startEmulation() {
-        if (!paused) return;
+    public synchronized void startEmulation() {
+        if (closed || !paused) return;
         
         scr.repaint();
         paused = false;
@@ -164,11 +175,21 @@ public class Tns extends Thread
         tim.scheduleAtFixedRate(task, 250, 20);
        }
     
-    public void stopEmulation() {
+    public synchronized void stopEmulation() {
         if (paused) return;
         
         paused = true;
         task.cancel();
+    }
+
+    public synchronized void shutdown() {
+        if (closed) return;
+        closed = true;
+        stopEmulation();
+        tim.cancel();
+        wdc.coldReset();
+        wap.ejectImage();
+        interrupt();
     }
     
     public boolean isPaused() {
@@ -179,7 +200,7 @@ public class Tns extends Thread
         return blank ? 2:0;
     }
     
-    public void ms20() {        
+    public synchronized void ms20() {
         if (!paused) {
             if (cfg.videoitk) {
                 itk.vSync();
@@ -206,7 +227,7 @@ public class Tns extends Thread
             try {
                 sleep(Long.MAX_VALUE);
             } catch (InterruptedException ex) {
-                Logger.getLogger(Tns.class.getName()).log(Level.SEVERE, null, ex);
+                return;
             }
         }        
     }    
@@ -497,7 +518,7 @@ public class Tns extends Thread
                 {if (cfg.videoitk) {grf.setMode(value);} break;}
             default: 
             {
-                if ((port & 0x0001) == 0) {
+                if (((port & 0x0001) == 0) && Boolean.getBoolean("tns.port.trace")) {
                     System.out.println(String.format("Out: %04X,%02X (%04X)", port,value&1,cpu.getRegPC()));
                 }                
             }

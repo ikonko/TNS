@@ -37,6 +37,9 @@ public class Wd implements ClockTimeoutListener {
     private boolean ir;
     private byte bb[];
     private RingBuffer buff;
+    private int tracedRes = -1;
+    private int tracedState = -1;
+    private boolean tracedIr;
     
     private final int IDLE = 0;
     private final int READ = 1;
@@ -93,6 +96,15 @@ public class Wd implements ClockTimeoutListener {
         timeout = 0;
         stat = IDLE;
         ir = false;
+    }
+
+    public final void coldReset() {
+        reset();
+        r3212 = 0;
+        mode = 0;
+        buff.reset();
+        selDrive(0);
+        trace("cold reset");
     }
     
     public int isInt() {
@@ -151,6 +163,11 @@ public class Wd implements ClockTimeoutListener {
 
     public void setCmd(int val) {
         ctl = val;
+        if (((ctl & 0xf0) == 0x00) || ((ctl & 0xf0) == 0x10)
+            || ((ctl & 0xf0) == 0x80) || ((ctl & 0xf0) == 0x90)) {
+            trace(String.format("command=%02X drive=%d track=%02X sector=%02X data=%02X mode=%02X",
+                ctl, open, trk, sec, dat, mode));
+        }
 //        System.out.println(String.format("Cmd: %02X (%04X)", val,m.getPC()));
         ir = false;
         switch(ctl&0xf0) {
@@ -180,6 +197,10 @@ public class Wd implements ClockTimeoutListener {
                 doInt(); 
                 break;
             }
+            default: {
+                trace(String.format("unsupported command=%02X", ctl));
+                break;
+            }
         }
         timeout = 0;
     }
@@ -187,6 +208,13 @@ public class Wd implements ClockTimeoutListener {
     public int getRes() {
         ir = false;
         state('S');
+        if ((res != tracedRes) || (stat != tracedState) || (ir != tracedIr)) {
+            trace(String.format("status=%02X state=%d irq=%s track=%02X sector=%02X",
+                    res, stat, ir, trk, sec));
+            tracedRes = res;
+            tracedState = stat;
+            tracedIr = ir;
+        }
 //        System.out.println(String.format("Res: %02X (%04X)", res,m.getPC()));
         return res;
     }
@@ -233,6 +261,8 @@ public class Wd implements ClockTimeoutListener {
     }
 
     public void set3212(int val) {
+        int previousControl = r3212;
+        int previousDrive = open;
         r3212 = val;
 //        System.out.println(String.format("Reg: %02X (%04X)", val,m.getPC()));
         if ((r3212&0x04)==0) reset();
@@ -243,13 +273,17 @@ public class Wd implements ClockTimeoutListener {
             case 0x02: {selDrive(4); break;}
             default  : {selDrive(0); break;}
         }
+        if ((previousControl != r3212) || (previousDrive != open)) {
+            trace(String.format("control=%02X selectBits=%02X open=%d", r3212,
+                (r3212 & 0x6a), open));
+        }
     }
 
     private void selDrive(int num) {
-        m.Led1.setEnabled(num==1);
-        m.Led2.setEnabled(num==2);
-        m.Led3.setEnabled(num==3);
-        m.Led4.setEnabled(num==4);
+        if (m.Led1 != null) m.Led1.setEnabled(num==1);
+        if (m.Led2 != null) m.Led2.setEnabled(num==2);
+        if (m.Led3 != null) m.Led3.setEnabled(num==3);
+        if (m.Led4 != null) m.Led4.setEnabled(num==4);
         if (open!=num) {
             if (open!=0) {
                 try {
@@ -298,6 +332,8 @@ public class Wd implements ClockTimeoutListener {
         
         if ((stat==READ) && (t=='R')){
             if (cnt==d.bps) {
+                trace(String.format("read complete drive=%d track=%02X sector=%02X",
+                        open, trk, sec));
                 cnt = 0;
                 if ((ctl&0x10)!=0) {
                     sec++;
@@ -352,13 +388,16 @@ public class Wd implements ClockTimeoutListener {
     private void doRead() {
         if (open==0) {
             res = R_NRDY;
+            trace(String.format("read not-ready track=%02X sector=%02X", trk, sec));
         }
         else {
             if (find()==true) {
                 res = R_BUSY;
                 try {
                     f.seek(position);
-                    f.read(bb, 0, d.bps);
+                    int bytesRead = f.read(bb, 0, d.bps);
+                    trace(String.format("read drive=%d track=%02X sector=%02X offset=%d bytes=%d",
+                            open, trk, sec, position, bytesRead));
                     cnt = 0;
                     if ((mode&0x08)!=0) { 
                         buff.put(bb, d.bps);
@@ -374,6 +413,8 @@ public class Wd implements ClockTimeoutListener {
             else {
                 res = R_NFND;
                 ir = true;
+                trace(String.format("read not-found drive=%d track=%02X sector=%02X",
+                        open, trk, sec));
             }
         }
     }
@@ -445,6 +486,12 @@ public class Wd implements ClockTimeoutListener {
                 res |= R_TR00;
             }
         }
+        else if (track == trk) {
+            stat = IDLE;
+            cnt = 0;
+            res = (trk == 0) ? R_TR00 : 0;
+            ir = true;
+        }
         else {
             if ((mode&0x08)!=0) { 
                 clk.setTimeout(50);
@@ -472,6 +519,12 @@ public class Wd implements ClockTimeoutListener {
         }
         ir = true;
         stat = IDLE;
+    }
+
+    private void trace(String message) {
+        if (Boolean.getBoolean("tns.fdc.trace")) {
+            System.out.println("FDC " + message);
+        }
     }
 
 }

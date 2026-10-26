@@ -85,6 +85,7 @@ public class Clock {
 
     public void reset() {
         tstates = 0;
+        timeout = 0;
     }
 
     public void setTimeout(int ntstates) {
